@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RAG Chatbot — Codebase Visualization</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0f1117;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+
+  header {
+    padding: 20px 32px;
+    border-bottom: 1px solid #1e2433;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #0f1117;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 18px; font-weight: 600; color: #f8fafc; }
+  header span { font-size: 13px; color: #64748b; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 20px 32px 0;
+    border-bottom: 1px solid #1e2433;
+  }
+  .tab {
+    padding: 8px 20px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #64748b;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: all 0.15s;
+  }
+  .tab:hover { color: #94a3b8; }
+  .tab.active {
+    background: #1e2433;
+    color: #e2e8f0;
+    border-color: #2d3748;
+  }
+
+  .view { display: none; padding: 32px; }
+  .view.active { display: block; }
+
+  /* ── LAYER VIEW ── */
+  .layers { display: flex; flex-direction: column; gap: 16px; max-width: 1000px; margin: 0 auto; }
+
+  .layer {
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid;
+  }
+  .layer-header {
+    padding: 12px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .layer-body { padding: 16px 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .layer.frontend  { border-color: #3b82f6; }
+  .layer.frontend .layer-header  { background: #1d3461; color: #93c5fd; }
+  .layer.api       { border-color: #8b5cf6; }
+  .layer.api .layer-header       { background: #2d1b69; color: #c4b5fd; }
+  .layer.core      { border-color: #f59e0b; }
+  .layer.core .layer-header      { background: #451a03; color: #fcd34d; }
+  .layer.tools     { border-color: #10b981; }
+  .layer.tools .layer-header     { background: #064e3b; color: #6ee7b7; }
+  .layer.storage   { border-color: #ef4444; }
+  .layer.storage .layer-header   { background: #450a0a; color: #fca5a5; }
+  .layer.models    { border-color: #64748b; }
+  .layer.models .layer-header    { background: #1e293b; color: #94a3b8; }
+
+  .file-card {
+    background: #1a1f2e;
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    min-width: 160px;
+  }
+  .file-card:hover { border-color: #4a5568; background: #1e2433; transform: translateY(-1px); }
+  .file-card.selected { border-color: #60a5fa; background: #1a2744; }
+  .file-card .filename { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+  .file-card .filedesc { font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.4; }
+  .file-card .exports { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .badge.class  { background: #1d3461; color: #93c5fd; }
+  .badge.fn     { background: #064e3b; color: #6ee7b7; }
+  .badge.model  { background: #451a03; color: #fcd34d; }
+
+  /* detail panel */
+  #detail-panel {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    width: 380px;
+    background: #0d1117;
+    border-left: 1px solid #1e2433;
+    overflow-y: auto;
+    padding: 24px;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    z-index: 200;
+  }
+  #detail-panel.open { transform: translateX(0); }
+  #detail-panel h2 { font-size: 15px; font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+  #detail-panel .path { font-size: 11px; color: #64748b; margin-bottom: 16px; font-family: monospace; }
+  #detail-panel h3 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin: 16px 0 8px; }
+  #detail-panel p { font-size: 13px; color: #94a3b8; line-height: 1.6; }
+  #detail-panel ul { padding-left: 16px; }
+  #detail-panel li { font-size: 13px; color: #94a3b8; margin-bottom: 4px; line-height: 1.5; }
+  #detail-panel li code { font-family: monospace; font-size: 12px; background: #1e2433; padding: 1px 5px; border-radius: 3px; color: #c4b5fd; }
+  .close-btn {
+    position: absolute; top: 16px; right: 16px;
+    background: none; border: none; color: #64748b;
+    cursor: pointer; font-size: 18px; line-height: 1;
+  }
+  .close-btn:hover { color: #e2e8f0; }
+
+  /* ── FLOW VIEW ── */
+  .flow-container { max-width: 900px; margin: 0 auto; }
+  .flow-title { font-size: 14px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 24px; }
+
+  .flow-step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 4px;
+  }
+  .flow-step-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 40px;
+    flex-shrink: 0;
+  }
+  .step-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .connector {
+    width: 2px;
+    flex: 1;
+    min-height: 24px;
+    background: #2d3748;
+    margin: 4px 0;
+  }
+  .flow-step-right {
+    padding-bottom: 24px;
+    flex: 1;
+  }
+  .step-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; margin-bottom: 6px;
+  }
+  .step-box {
+    background: #1a1f2e;
+    border: 1px solid #2d3748;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .step-box .file-ref {
+    font-size: 11px; font-family: monospace; color: #64748b; margin-bottom: 6px;
+  }
+  .step-box .step-desc { font-size: 13px; color: #94a3b8; line-height: 1.6; }
+  .step-box .step-desc code { font-family: monospace; font-size: 12px; background: #0f1117; padding: 1px 5px; border-radius: 3px; color: #c4b5fd; }
+  .step-box .arrow-out {
+    margin-top: 10px; font-size: 12px; color: #64748b;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .arrow-out .payload {
+    font-family: monospace; font-size: 11px;
+    background: #0f1117; border: 1px solid #2d3748;
+    border-radius: 4px; padding: 3px 8px; color: #fcd34d;
+  }
+
+  .s1 .step-num { background: #1d3461; color: #93c5fd; }
+  .s1 .step-label { color: #93c5fd; }
+  .s1 .step-box { border-color: #1d3461; }
+  .s2 .step-num { background: #2d1b69; color: #c4b5fd; }
+  .s2 .step-label { color: #c4b5fd; }
+  .s2 .step-box { border-color: #2d1b69; }
+  .s3 .step-num { background: #451a03; color: #fcd34d; }
+  .s3 .step-label { color: #fcd34d; }
+  .s3 .step-box { border-color: #451a03; }
+  .s4 .step-num { background: #064e3b; color: #6ee7b7; }
+  .s4 .step-label { color: #6ee7b7; }
+  .s4 .step-box { border-color: #064e3b; }
+  .s5 .step-num { background: #450a0a; color: #fca5a5; }
+  .s5 .step-label { color: #fca5a5; }
+  .s5 .step-box { border-color: #450a0a; }
+  .s6 .step-num { background: #2d1b69; color: #c4b5fd; }
+  .s6 .step-label { color: #c4b5fd; }
+  .s6 .step-box { border-color: #2d1b69; }
+  .s7 .step-num { background: #1d3461; color: #93c5fd; }
+  .s7 .step-label { color: #93c5fd; }
+  .s7 .step-box { border-color: #1d3461; }
+
+  /* ── DEPS VIEW ── */
+  .deps-container { max-width: 900px; margin: 0 auto; }
+  .deps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .dep-card {
+    background: #1a1f2e;
+    border: 1px solid #2d3748;
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .dep-card h3 { font-size: 13px; font-weight: 700; color: #e2e8f0; margin-bottom: 4px; font-family: monospace; }
+  .dep-card .dep-role { font-size: 11px; color: #64748b; margin-bottom: 12px; }
+  .dep-card .imports { display: flex; flex-wrap: wrap; gap: 6px; }
+  .imp {
+    font-size: 11px; font-family: monospace;
+    padding: 3px 9px; border-radius: 4px;
+    border: 1px solid;
+  }
+  .imp.internal { background: #1a2744; border-color: #1d3461; color: #93c5fd; }
+  .imp.external { background: #0f1117; border-color: #2d3748; color: #94a3b8; }
+
+  .legend { display: flex; gap: 16px; margin-bottom: 20px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748b; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  @media (max-width: 700px) {
+    .deps-grid { grid-template-columns: 1fr; }
+    #detail-panel { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+  <h1>RAG Chatbot Codebase</h1>
+  <span>starting-ragchatbot-codebase</span>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showView('layers')">Layer Map</div>
+  <div class="tab" onclick="showView('flow')">Query Flow</div>
+  <div class="tab" onclick="showView('deps')">Dependencies</div>
+</div>
+
+<!-- ═══════════════════ LAYER MAP VIEW ═══════════════════ -->
+<div id="view-layers" class="view active">
+  <div class="layers">
+
+    <div class="layer frontend">
+      <div class="layer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        Frontend — Browser
+      </div>
+      <div class="layer-body">
+        <div class="file-card" onclick="showDetail('index')">
+          <div class="filename">index.html</div>
+          <div class="filedesc">Chat UI shell, sidebar, suggested questions</div>
+          <div class="exports">
+            <span class="badge model">HTML</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('script')">
+          <div class="filename">script.js</div>
+          <div class="filedesc">All UI logic — send, receive, session, stats</div>
+          <div class="exports">
+            <span class="badge fn">sendMessage()</span>
+            <span class="badge fn">addMessage()</span>
+            <span class="badge fn">createNewSession()</span>
+            <span class="badge fn">loadCourseStats()</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('style')">
+          <div class="filename">style.css</div>
+          <div class="filedesc">Chat bubbles, loading spinner, layout</div>
+          <div class="exports"><span class="badge model">CSS</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer api">
+      <div class="layer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        API Layer — FastAPI
+      </div>
+      <div class="layer-body">
+        <div class="file-card" onclick="showDetail('app')">
+          <div class="filename">app.py</div>
+          <div class="filedesc">HTTP endpoints, CORS, static file serving</div>
+          <div class="exports">
+            <span class="badge fn">POST /api/query</span>
+            <span class="badge fn">GET /api/courses</span>
+            <span class="badge model">startup event</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('config')">
+          <div class="filename">config.py</div>
+          <div class="filedesc">Env vars, model names, paths, limits</div>
+          <div class="exports">
+            <span class="badge class">Config</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('main')">
+          <div class="filename">main.py</div>
+          <div class="filedesc">Entry point — runs uvicorn server</div>
+          <div class="exports"><span class="badge fn">main()</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer core">
+      <div class="layer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/></svg>
+        Core — RAG Orchestration
+      </div>
+      <div class="layer-body">
+        <div class="file-card" onclick="showDetail('rag')">
+          <div class="filename">rag_system.py</div>
+          <div class="filedesc">Main orchestrator — coordinates all subsystems</div>
+          <div class="exports">
+            <span class="badge class">RAGSystem</span>
+            <span class="badge fn">query()</span>
+            <span class="badge fn">add_course_folder()</span>
+            <span class="badge fn">get_course_analytics()</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('ai')">
+          <div class="filename">ai_generator.py</div>
+          <div class="filedesc">Claude API calls, tool-use loop, system prompt</div>
+          <div class="exports">
+            <span class="badge class">AIGenerator</span>
+            <span class="badge fn">generate_response()</span>
+            <span class="badge fn">_handle_tool_execution()</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('session')">
+          <div class="filename">session_manager.py</div>
+          <div class="filedesc">In-memory conversation history per session</div>
+          <div class="exports">
+            <span class="badge class">SessionManager</span>
+            <span class="badge fn">create_session()</span>
+            <span class="badge fn">add_exchange()</span>
+            <span class="badge fn">get_history()</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('docproc')">
+          <div class="filename">document_processor.py</div>
+          <div class="filedesc">Parses .txt/.pdf/.docx into Course + chunks</div>
+          <div class="exports">
+            <span class="badge class">DocumentProcessor</span>
+            <span class="badge fn">process_course_document()</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer tools">
+      <div class="layer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Tool Layer — Claude Tool Use
+      </div>
+      <div class="layer-body">
+        <div class="file-card" onclick="showDetail('tools')">
+          <div class="filename">search_tools.py</div>
+          <div class="filedesc">Tool definitions + execution that Claude can invoke</div>
+          <div class="exports">
+            <span class="badge class">ToolManager</span>
+            <span class="badge class">CourseSearchTool</span>
+            <span class="badge fn">execute()</span>
+            <span class="badge fn">get_tool_definitions()</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer storage">
+      <div class="layer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Storage — ChromaDB Vector Store
+      </div>
+      <div class="layer-body">
+        <div class="file-card" onclick="showDetail('vector')">
+          <div class="filename">vector_store.py</div>
+          <div class="filedesc">ChromaDB wrapper — two collections, semantic search</div>
+          <div class="exports">
+            <span class="badge class">VectorStore</span>
+            <span class="badge class">SearchResults</span>
+            <span class="badge fn">search()</span>
+            <span class="badge fn">add_course_content()</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('chroma')">
+          <div class="filename">ChromaDB (disk)</div>
+          <div class="filedesc">Persistent vector DB — course_catalog + course_content</div>
+          <div class="exports">
+            <span class="badge model">course_catalog</span>
+            <span class="badge model">course_content</span>
+          </div>
+        </div>
+        <div class="file-card" onclick="showDetail('docs')">
+          <div class="filename">docs/*.txt</div>
+          <div class="filedesc">Raw course scripts (4 courses) loaded at startup</div>
+          <div class="exports">
+            <span class="badge model">course1–4_script.txt</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layer models">
+      <div class="layer-header">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Data Models
+      </div>
+      <div class="layer-body">
+        <div class="file-card" onclick="showDetail('models')">
+          <div class="filename">models.py</div>
+          <div class="filedesc">Shared dataclasses used across all layers</div>
+          <div class="exports">
+            <span class="badge model">Course</span>
+            <span class="badge model">Lesson</span>
+            <span class="badge model">CourseChunk</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════ FLOW VIEW ═══════════════════ -->
+<div id="view-flow" class="view">
+  <div class="flow-container">
+    <div class="flow-title">Query Lifecycle — from keystroke to response</div>
+
+    <div class="flow-step s1">
+      <div class="flow-step-left">
+        <div class="step-num">1</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">User Input</div>
+        <div class="step-box">
+          <div class="file-ref">frontend/script.js — sendMessage()</div>
+          <div class="step-desc">
+            User types a query and presses Enter or Send.<br>
+            Input is disabled, a loading spinner is shown, user message bubble is added to the chat.
+          </div>
+          <div class="arrow-out">
+            POST /api/query
+            <span class="payload">{ query: "...", session_id: "session_1" }</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s2">
+      <div class="flow-step-left">
+        <div class="step-num">2</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">HTTP Endpoint</div>
+        <div class="step-box">
+          <div class="file-ref">backend/app.py — query_documents()</div>
+          <div class="step-desc">
+            FastAPI validates the request with Pydantic <code>QueryRequest</code>.<br>
+            If no <code>session_id</code>, creates one via <code>session_manager.create_session()</code>.<br>
+            Delegates to <code>rag_system.query()</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s3">
+      <div class="flow-step-left">
+        <div class="step-num">3</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">RAG Orchestration</div>
+        <div class="step-box">
+          <div class="file-ref">backend/rag_system.py — query()</div>
+          <div class="step-desc">
+            Wraps query: <code>"Answer this question about course materials: {query}"</code><br>
+            Fetches prior conversation turns from <code>SessionManager</code> (up to <code>MAX_HISTORY</code>).<br>
+            Calls <code>ai_generator.generate_response()</code> with the prompt, history, and tool definitions.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s4">
+      <div class="flow-step-left">
+        <div class="step-num">4a</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">Claude API — Call 1 (with tools)</div>
+        <div class="step-box">
+          <div class="file-ref">backend/ai_generator.py — generate_response()</div>
+          <div class="step-desc">
+            Sends system prompt + conversation history + user query to Claude.<br>
+            <code>tool_choice: auto</code> — Claude decides whether to call <code>search_course_content</code>.<br><br>
+            <strong>Path A</strong>: Claude answers directly → return text immediately.<br>
+            <strong>Path B</strong>: <code>stop_reason == "tool_use"</code> → proceed to 4b.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s5">
+      <div class="flow-step-left">
+        <div class="step-num">4b</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">Vector Search (Tool Execution)</div>
+        <div class="step-box">
+          <div class="file-ref">backend/search_tools.py → vector_store.py</div>
+          <div class="step-desc">
+            <code>ToolManager.execute_tool("search_course_content", query, course_name?, lesson_number?)</code><br><br>
+            1. <strong>Resolve course name</strong> — semantic search on <code>course_catalog</code> ChromaDB collection.<br>
+            2. <strong>Build filter</strong> — <code>where: { course_title, lesson_number }</code>.<br>
+            3. <strong>Content search</strong> — vector similarity query on <code>course_content</code> collection using SentenceTransformer embeddings.<br>
+            4. Format results with <code>[Course - Lesson N]</code> headers, store sources for UI.
+          </div>
+          <div class="arrow-out">
+            returns formatted text chunks to Claude
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s6">
+      <div class="flow-step-left">
+        <div class="step-num">4c</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">Claude API — Call 2 (synthesize)</div>
+        <div class="step-box">
+          <div class="file-ref">backend/ai_generator.py — _handle_tool_execution()</div>
+          <div class="step-desc">
+            Tool results are appended to the message thread as a <code>tool_result</code> block.<br>
+            Second Claude call is made <strong>without tools</strong> — Claude synthesizes retrieved chunks into a final answer.
+          </div>
+          <div class="arrow-out">
+            returns
+            <span class="payload">final answer string</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s3">
+      <div class="flow-step-left">
+        <div class="step-num">5</div>
+        <div class="connector"></div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">Session Update</div>
+        <div class="step-box">
+          <div class="file-ref">backend/rag_system.py + session_manager.py</div>
+          <div class="step-desc">
+            Sources are collected from <code>tool_manager.get_last_sources()</code> then reset.<br>
+            <code>session_manager.add_exchange(session_id, query, response)</code> saves the Q&amp;A pair to history.<br>
+            History is capped at <code>MAX_HISTORY * 2</code> messages.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step s1">
+      <div class="flow-step-left">
+        <div class="step-num">6</div>
+      </div>
+      <div class="flow-step-right">
+        <div class="step-label">Render Response</div>
+        <div class="step-box">
+          <div class="file-ref">frontend/script.js — addMessage()</div>
+          <div class="step-desc">
+            Loading spinner removed. <code>data.answer</code> rendered as Markdown via <code>marked.parse()</code>.<br>
+            <code>data.sources</code> shown in a collapsible <code>&lt;details&gt;</code> block below the message.<br>
+            Input re-enabled, focus returned to text box.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════ DEPS VIEW ═══════════════════ -->
+<div id="view-deps" class="view">
+  <div class="deps-container">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#1d3461;border:1px solid #3b82f6"></div> Internal module</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1e293b;border:1px solid #475569"></div> External package</div>
+    </div>
+    <div class="deps-grid">
+
+      <div class="dep-card">
+        <h3>app.py</h3>
+        <div class="dep-role">API entry point</div>
+        <div class="imports">
+          <span class="imp internal">config</span>
+          <span class="imp internal">rag_system</span>
+          <span class="imp external">fastapi</span>
+          <span class="imp external">pydantic</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>rag_system.py</h3>
+        <div class="dep-role">Core orchestrator</div>
+        <div class="imports">
+          <span class="imp internal">document_processor</span>
+          <span class="imp internal">vector_store</span>
+          <span class="imp internal">ai_generator</span>
+          <span class="imp internal">session_manager</span>
+          <span class="imp internal">search_tools</span>
+          <span class="imp internal">models</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>ai_generator.py</h3>
+        <div class="dep-role">LLM interaction</div>
+        <div class="imports">
+          <span class="imp external">anthropic</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>search_tools.py</h3>
+        <div class="dep-role">Claude tool definitions</div>
+        <div class="imports">
+          <span class="imp internal">vector_store</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>vector_store.py</h3>
+        <div class="dep-role">Vector DB wrapper</div>
+        <div class="imports">
+          <span class="imp internal">models</span>
+          <span class="imp external">chromadb</span>
+          <span class="imp external">sentence_transformers</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>document_processor.py</h3>
+        <div class="dep-role">File ingestion</div>
+        <div class="imports">
+          <span class="imp internal">models</span>
+          <span class="imp external">pathlib / os</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>session_manager.py</h3>
+        <div class="dep-role">Conversation memory</div>
+        <div class="imports">
+          <span class="imp external">dataclasses</span>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <h3>models.py</h3>
+        <div class="dep-role">Shared data types</div>
+        <div class="imports">
+          <span class="imp external">dataclasses</span>
+        </div>
+      </div>
+
+      <div class="dep-card" style="grid-column: 1 / -1;">
+        <h3>script.js (frontend)</h3>
+        <div class="dep-role">Browser-side — no imports, uses fetch API + marked.js (CDN)</div>
+        <div class="imports">
+          <span class="imp external">marked.js (CDN)</span>
+          <span class="imp external">fetch API</span>
+          <span class="imp external">POST /api/query</span>
+          <span class="imp external">GET /api/courses</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ DETAIL PANEL ═══════════════════ -->
+<div id="detail-panel">
+  <button class="close-btn" onclick="closeDetail()">✕</button>
+  <div id="detail-content"></div>
+</div>
+
+<script>
+const details = {
+  index: {
+    name: 'index.html', path: 'frontend/index.html',
+    desc: 'The HTML shell for the chat interface. Defines the layout: a sidebar showing course stats and suggested questions, and the main chat area with message bubbles and an input box.',
+    sections: [
+      { title: 'Key elements', items: ['<code>#chatMessages</code> — scrollable message container', '<code>#chatInput</code> — user text input', '<code>#sendButton</code> — send trigger', '<code>#totalCourses</code> — course count badge', '<code>#courseTitles</code> — list of loaded course names', '<code>.suggested-item</code> — pre-written question buttons'] }
+    ]
+  },
+  script: {
+    name: 'script.js', path: 'frontend/script.js',
+    desc: 'All client-side logic. Handles sending messages, rendering responses as Markdown, managing the loading spinner, and updating sidebar stats. Maintains the current session ID in memory.',
+    sections: [
+      { title: 'Key functions', items: ['<code>sendMessage()</code> — POST /api/query, show/hide loading spinner', '<code>addMessage()</code> — render user/assistant bubbles with optional sources', '<code>createNewSession()</code> — reset session ID and clear chat', '<code>loadCourseStats()</code> — GET /api/courses, populate sidebar'] },
+      { title: 'State', items: ['<code>currentSessionId</code> — set on first response, sent on each subsequent request'] }
+    ]
+  },
+  style: {
+    name: 'style.css', path: 'frontend/style.css',
+    desc: 'Styles for the chat UI. Defines message bubble layouts for user and assistant, the three-dot loading animation, the collapsible sources section, and the sidebar layout.',
+    sections: []
+  },
+  app: {
+    name: 'app.py', path: 'backend/app.py',
+    desc: 'FastAPI application. Defines the two REST endpoints, sets up CORS and trusted host middleware, initializes the RAGSystem on import, and loads documents from docs/ at startup. Also mounts the frontend as static files at /.',
+    sections: [
+      { title: 'Endpoints', items: ['<code>POST /api/query</code> — takes QueryRequest, returns QueryResponse (answer, sources, session_id)', '<code>GET /api/courses</code> — returns CourseStats (total_courses, course_titles)'] },
+      { title: 'Startup', items: ['Calls <code>rag_system.add_course_folder("../docs")</code> to ingest course files if not already indexed'] }
+    ]
+  },
+  config: {
+    name: 'config.py', path: 'backend/config.py',
+    desc: 'Central configuration loaded from environment variables (.env file). All tuneable parameters live here.',
+    sections: [
+      { title: 'Key settings', items: ['<code>ANTHROPIC_API_KEY</code> — Claude API key', '<code>ANTHROPIC_MODEL</code> — model ID (e.g. claude-sonnet-4-6)', '<code>EMBEDDING_MODEL</code> — SentenceTransformer model name', '<code>CHROMA_PATH</code> — where ChromaDB stores data on disk', '<code>CHUNK_SIZE / CHUNK_OVERLAP</code> — text splitting parameters', '<code>MAX_RESULTS</code> — vector search result count', '<code>MAX_HISTORY</code> — conversation turns to keep'] }
+    ]
+  },
+  main: {
+    name: 'main.py', path: 'main.py',
+    desc: 'Entry point. Starts the uvicorn ASGI server pointing at backend/app.py.',
+    sections: []
+  },
+  rag: {
+    name: 'rag_system.py', path: 'backend/rag_system.py',
+    desc: 'The central orchestrator. Owns instances of every subsystem and coordinates them for each query. Handles both document ingestion (at startup) and query processing (at request time).',
+    sections: [
+      { title: 'query() steps', items: ['1. Wrap query in a prompt string', '2. Fetch conversation history from SessionManager', '3. Call AIGenerator with prompt + history + tools', '4. Collect sources from ToolManager', '5. Save Q&A exchange to SessionManager', '6. Return (answer, sources)'] },
+      { title: 'Ingestion', items: ['<code>add_course_folder()</code> — skips already-indexed courses by title', '<code>add_course_document()</code> — process one file → Course + chunks → VectorStore'] }
+    ]
+  },
+  ai: {
+    name: 'ai_generator.py', path: 'backend/ai_generator.py',
+    desc: 'Wraps the Anthropic SDK. Handles both direct responses and the two-call tool-use loop. Keeps a static SYSTEM_PROMPT and pre-built base API params for efficiency.',
+    sections: [
+      { title: 'generate_response() flow', items: ['Build system content (prompt + optional history)', 'Call Claude with tool_choice: auto', 'If stop_reason == "tool_use" → _handle_tool_execution()', 'Otherwise return response.content[0].text'] },
+      { title: '_handle_tool_execution() flow', items: ['Append assistant tool_use blocks to message thread', 'Execute each tool via ToolManager', 'Append tool_result blocks to thread', 'Second Claude call without tools → final answer'] }
+    ]
+  },
+  session: {
+    name: 'session_manager.py', path: 'backend/session_manager.py',
+    desc: 'In-memory conversation store. Each session is a list of Message objects (role + content). History is trimmed when it exceeds MAX_HISTORY * 2 messages. No persistence — sessions are lost on server restart.',
+    sections: [
+      { title: 'Methods', items: ['<code>create_session()</code> → "session_N" ID', '<code>add_exchange()</code> → appends user + assistant message pair', '<code>get_conversation_history()</code> → formatted string "Role: content\\n..."', '<code>clear_session()</code> → empty the list'] }
+    ]
+  },
+  docproc: {
+    name: 'document_processor.py', path: 'backend/document_processor.py',
+    desc: 'Reads .txt, .pdf, or .docx course files from disk, parses them into structured Course + Lesson objects, then splits content into overlapping chunks (CourseChunk) for vector indexing.',
+    sections: [
+      { title: 'Output', items: ['<code>Course</code> — title, instructor, link, list of Lessons', '<code>CourseChunk</code> — course_title, lesson_number, content, chunk_index'] }
+    ]
+  },
+  tools: {
+    name: 'search_tools.py', path: 'backend/search_tools.py',
+    desc: 'Defines the tool that Claude can call. ToolManager is a registry — register any Tool subclass and it becomes available to the AI. Currently only CourseSearchTool is registered.',
+    sections: [
+      { title: 'CourseSearchTool inputs', items: ['<code>query</code> (required) — what to find', '<code>course_name</code> (optional) — partial match supported', '<code>lesson_number</code> (optional) — filter to a specific lesson'] },
+      { title: 'ToolManager', items: ['<code>register_tool()</code> — add any Tool subclass', '<code>get_tool_definitions()</code> — returns Anthropic-format tool specs', '<code>execute_tool(name, **kwargs)</code> — dispatch by name', '<code>get_last_sources() / reset_sources()</code> — pass source info back to RAGSystem'] }
+    ]
+  },
+  vector: {
+    name: 'vector_store.py', path: 'backend/vector_store.py',
+    desc: 'ChromaDB wrapper with two collections. Uses SentenceTransformer for embedding. The search() method is the main interface: it resolves course names semantically, builds filters, and runs vector similarity search.',
+    sections: [
+      { title: 'Collections', items: ['<code>course_catalog</code> — one doc per course (title + instructor + links metadata)', '<code>course_content</code> — one doc per chunk (course_title + lesson_number metadata)'] },
+      { title: 'search() steps', items: ['1. If course_name given → semantic lookup in course_catalog', '2. Build ChromaDB where filter', '3. Query course_content with n_results=MAX_RESULTS'] }
+    ]
+  },
+  chroma: {
+    name: 'ChromaDB (disk)', path: 'chroma_db/ (configured via CHROMA_PATH)',
+    desc: 'Persistent vector database stored on disk. Two collections are maintained. Embeddings are generated by SentenceTransformer and stored alongside document text and metadata.',
+    sections: [
+      { title: 'course_catalog', items: ['ID: course title', 'Document: course title text (for semantic search)', 'Metadata: title, instructor, course_link, lessons_json, lesson_count'] },
+      { title: 'course_content', items: ['ID: {title}_{chunk_index}', 'Document: text chunk', 'Metadata: course_title, lesson_number, chunk_index'] }
+    ]
+  },
+  docs: {
+    name: 'docs/*.txt', path: 'docs/course1_script.txt … course4_script.txt',
+    desc: 'Raw course script text files. These are the source documents ingested at server startup. The DocumentProcessor reads and parses them into structured Course objects.',
+    sections: [
+      { title: 'Files', items: ['<code>course1_script.txt</code>', '<code>course2_script.txt</code>', '<code>course3_script.txt</code>', '<code>course4_script.txt</code>'] }
+    ]
+  },
+  models: {
+    name: 'models.py', path: 'backend/models.py',
+    desc: 'Shared dataclasses used across document_processor, vector_store, and rag_system. The single source of truth for data shapes.',
+    sections: [
+      { title: 'Dataclasses', items: ['<code>Course</code> — title, instructor, course_link, lessons: List[Lesson]', '<code>Lesson</code> — lesson_number, title, lesson_link', '<code>CourseChunk</code> — course_title, lesson_number, content, chunk_index'] }
+    ]
+  }
+};
+
+function showDetail(key) {
+  const d = details[key];
+  if (!d) return;
+  document.querySelectorAll('.file-card').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  let html = `<h2>${d.name}</h2><div class="path">${d.path}</div>`;
+  html += `<h3>Overview</h3><p>${d.desc}</p>`;
+  for (const s of d.sections) {
+    html += `<h3>${s.title}</h3><ul>`;
+    for (const item of s.items) html += `<li>${item}</li>`;
+    html += '</ul>';
+  }
+  document.getElementById('detail-content').innerHTML = html;
+  document.getElementById('detail-panel').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  document.querySelectorAll('.file-card').forEach(c => c.classList.remove('selected'));
+}
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  closeDetail();
+}
+</script>
+</body>
+</html>
